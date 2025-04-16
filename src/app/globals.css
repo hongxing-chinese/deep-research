@@ -114,6 +114,12 @@
   }
 }
 
+@page {
+  size: "A4";
+  /* Hide print header and footer */
+  margin: 0mm;
+}
+
 .float-menu-button {
   @apply w-8 h-8 hover:bg-transparent text-slate-600 hover:text-slate-950 dark:text-slate-400 dark:hover:text-slate-50;
 }
@@ -123,5 +129,5 @@
 }
 
 .from-item {
-  @apply grid grid-cols-4 gap-4 space-y-0 items-center;
+  @apply grid grid-cols-4 gap-2 max-sm:gap-1 space-y-0 items-center;
 }

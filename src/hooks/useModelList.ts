@@ -7,10 +7,12 @@ import {
   ANTHROPIC_BASE_URL,
   DEEPSEEK_BASE_URL,
   XAI_BASE_URL,
+  POLLINATIONS_BASE_URL,
   OLLAMA_BASE_URL,
 } from "@/constants/urls";
+import { multiApiKeyPolling } from "@/utils/model";
+import { generateSignature } from "@/utils/signature";
 import { completePath } from "@/utils/url";
-import { shuffle } from "radash";
 
 interface GeminiModel {
   name: string;
@@ -92,26 +94,22 @@ function useModelList() {
   }, [provider]);
 
   async function refresh(provider: string): Promise<string[]> {
+    const { accessPassword } = useSettingStore.getState();
+    const accessKey = generateSignature(accessPassword, Date.now());
+
     if (provider === "google") {
-      const {
-        apiKey = "",
-        apiProxy,
-        accessPassword,
-      } = useSettingStore.getState();
-      if (
-        (mode === "local" && !apiKey) ||
-        (mode === "proxy" && !accessPassword)
-      ) {
+      const { apiKey = "", apiProxy } = useSettingStore.getState();
+      if (mode === "local" && !apiKey) {
         return [];
       }
-      const apiKeys = shuffle(apiKey.split(","));
+      const key = multiApiKeyPolling(apiKey);
       const response = await fetch(
         mode === "local"
           ? completePath(apiProxy || GEMINI_BASE_URL, "/v1beta") + "/models"
           : "/api/ai/google/v1beta/models",
         {
           headers: {
-            "x-goog-api-key": mode === "local" ? apiKeys[0] : accessPassword,
+            "x-goog-api-key": mode === "local" ? key : accessKey,
           },
         }
       );
@@ -126,18 +124,12 @@ function useModelList() {
       setModelList(newModelList);
       return newModelList;
     } else if (provider === "openrouter") {
-      const {
-        openRouterApiKey = "",
-        openRouterApiProxy,
-        accessPassword,
-      } = useSettingStore.getState();
-      if (
-        (mode === "local" && !openRouterApiKey) ||
-        (mode === "proxy" && !accessPassword)
-      ) {
+      const { openRouterApiKey = "", openRouterApiProxy } =
+        useSettingStore.getState();
+      if (mode === "local" && !openRouterApiKey) {
         return [];
       }
-      const apiKeys = shuffle(openRouterApiKey.split(","));
+      const apiKey = multiApiKeyPolling(openRouterApiKey);
       const response = await fetch(
         mode === "local"
           ? completePath(openRouterApiProxy || OPENROUTER_BASE_URL, "/api/v1") +
@@ -145,9 +137,7 @@ function useModelList() {
           : "/api/ai/openrouter/v1/models",
         {
           headers: {
-            authorization: `Bearer ${
-              mode === "local" ? apiKeys[0] : accessPassword
-            }`,
+            authorization: `Bearer ${mode === "local" ? apiKey : accessKey}`,
           },
         }
       );
@@ -156,27 +146,18 @@ function useModelList() {
       setModelList(newModelList);
       return newModelList;
     } else if (provider === "openai") {
-      const {
-        openAIApiKey = "",
-        openAIApiProxy,
-        accessPassword,
-      } = useSettingStore.getState();
-      if (
-        (mode === "local" && !openAIApiKey) ||
-        (mode === "proxy" && !accessPassword)
-      ) {
+      const { openAIApiKey = "", openAIApiProxy } = useSettingStore.getState();
+      if (mode === "local" && !openAIApiKey) {
         return [];
       }
-      const apiKeys = shuffle(openAIApiKey.split(","));
+      const apiKey = multiApiKeyPolling(openAIApiKey);
       const response = await fetch(
         mode === "local"
           ? completePath(openAIApiProxy || OPENAI_BASE_URL, "/v1") + "/models"
           : "/api/ai/openai/v1/models",
         {
           headers: {
-            authorization: `Bearer ${
-              mode === "local" ? apiKeys[0] : accessPassword
-            }`,
+            authorization: `Bearer ${mode === "local" ? apiKey : accessKey}`,
           },
         }
       );
@@ -195,18 +176,12 @@ function useModelList() {
       setModelList(newModelList);
       return newModelList;
     } else if (provider === "anthropic") {
-      const {
-        anthropicApiKey = "",
-        anthropicApiProxy,
-        accessPassword,
-      } = useSettingStore.getState();
-      if (
-        (mode === "local" && !anthropicApiKey) ||
-        (mode === "proxy" && !accessPassword)
-      ) {
+      const { anthropicApiKey = "", anthropicApiProxy } =
+        useSettingStore.getState();
+      if (mode === "local" && !anthropicApiKey) {
         return [];
       }
-      const apiKeys = shuffle(anthropicApiKey.split(","));
+      const apiKey = multiApiKeyPolling(anthropicApiKey);
       const response = await fetch(
         mode === "local"
           ? completePath(anthropicApiProxy || ANTHROPIC_BASE_URL, "/v1") +
@@ -215,7 +190,7 @@ function useModelList() {
         {
           headers: {
             "Content-Type": "application/json",
-            "x-api-key": mode === "local" ? apiKeys[0] : accessPassword,
+            "x-api-key": mode === "local" ? apiKey : accessKey,
             "Anthropic-Version": "2023-06-01",
             // Avoid cors error
             "anthropic-dangerous-direct-browser-access": "true",
@@ -227,18 +202,12 @@ function useModelList() {
       setModelList(newModelList);
       return newModelList;
     } else if (provider === "deepseek") {
-      const {
-        deepseekApiKey = "",
-        deepseekApiProxy,
-        accessPassword,
-      } = useSettingStore.getState();
-      if (
-        (mode === "local" && !deepseekApiKey) ||
-        (mode === "proxy" && !accessPassword)
-      ) {
+      const { deepseekApiKey = "", deepseekApiProxy } =
+        useSettingStore.getState();
+      if (mode === "local" && !deepseekApiKey) {
         return [];
       }
-      const apiKeys = shuffle(deepseekApiKey.split(","));
+      const apiKey = multiApiKeyPolling(deepseekApiKey);
       const response = await fetch(
         mode === "local"
           ? completePath(deepseekApiProxy || DEEPSEEK_BASE_URL, "/v1") +
@@ -246,9 +215,7 @@ function useModelList() {
           : "/api/ai/deepseek/v1/models",
         {
           headers: {
-            authorization: `Bearer ${
-              mode === "local" ? apiKeys[0] : accessPassword
-            }`,
+            authorization: `Bearer ${mode === "local" ? apiKey : accessKey}`,
           },
         }
       );
@@ -257,27 +224,18 @@ function useModelList() {
       setModelList(newModelList);
       return newModelList;
     } else if (provider === "xai") {
-      const {
-        xAIApiKey = "",
-        xAIApiProxy,
-        accessPassword,
-      } = useSettingStore.getState();
-      if (
-        (mode === "local" && !xAIApiKey) ||
-        (mode === "proxy" && !accessPassword)
-      ) {
+      const { xAIApiKey = "", xAIApiProxy } = useSettingStore.getState();
+      if (mode === "local" && !xAIApiKey) {
         return [];
       }
-      const apiKeys = shuffle(xAIApiKey.split(","));
+      const apiKey = multiApiKeyPolling(xAIApiKey);
       const response = await fetch(
         mode === "local"
           ? completePath(xAIApiProxy || XAI_BASE_URL, "/v1") + "/models"
           : "/api/ai/xai/v1/models",
         {
           headers: {
-            authorization: `Bearer ${
-              mode === "local" ? apiKeys[0] : accessPassword
-            }`,
+            authorization: `Bearer ${mode === "local" ? apiKey : accessKey}`,
           },
         }
       );
@@ -288,18 +246,12 @@ function useModelList() {
       setModelList(newModelList);
       return newModelList;
     } else if (provider === "openaicompatible") {
-      const {
-        openAICompatibleApiKey = "",
-        openAICompatibleApiProxy,
-        accessPassword,
-      } = useSettingStore.getState();
-      if (
-        (mode === "local" && !openAICompatibleApiKey) ||
-        (mode === "proxy" && !accessPassword)
-      ) {
+      const { openAICompatibleApiKey = "", openAICompatibleApiProxy } =
+        useSettingStore.getState();
+      if (mode === "local" && !openAICompatibleApiKey) {
         return [];
       }
-      const apiKeys = shuffle(openAICompatibleApiKey.split(","));
+      const apiKey = multiApiKeyPolling(openAICompatibleApiKey);
       const response = await fetch(
         mode === "local"
           ? completePath(openAICompatibleApiProxy || OPENAI_BASE_URL, "/v1") +
@@ -307,9 +259,7 @@ function useModelList() {
           : "/api/ai/openaicompatible/v1/models",
         {
           headers: {
-            authorization: `Bearer ${
-              mode === "local" ? apiKeys[0] : accessPassword
-            }`,
+            authorization: `Bearer ${mode === "local" ? apiKey : accessKey}`,
           },
         }
       );
@@ -317,14 +267,29 @@ function useModelList() {
       const newModelList = (data as OpenAIModel[]).map((item) => item.id);
       setModelList(newModelList);
       return newModelList;
-    } else if (provider === "ollama") {
-      const { ollamaApiProxy, accessPassword } = useSettingStore.getState();
-      if (mode === "proxy" && !accessPassword) {
-        return [];
-      }
+    } else if (provider === "pollinations") {
+      const { pollinationsApiProxy } = useSettingStore.getState();
       const headers = new Headers();
-      if (mode === "proxy")
-        headers.set("Authorization", `Bearer ${accessPassword}`);
+      if (mode === "proxy") headers.set("Authorization", `Bearer ${accessKey}`);
+      const response = await fetch(
+        mode === "proxy"
+          ? "/api/ai/pollinations/models"
+          : completePath(pollinationsApiProxy || POLLINATIONS_BASE_URL) +
+              "/models",
+        {
+          headers,
+        }
+      );
+      const { data = [] } = await response.json();
+      const newModelList = (data as OpenAIModel[])
+        .map((item) => item.id)
+        .filter((name) => !name.includes("audio"));
+      setModelList(newModelList);
+      return newModelList;
+    } else if (provider === "ollama") {
+      const { ollamaApiProxy } = useSettingStore.getState();
+      const headers = new Headers();
+      if (mode === "proxy") headers.set("Authorization", `Bearer ${accessKey}`);
       const response = await fetch(
         mode === "proxy"
           ? "/api/ai/ollama/api/tags"

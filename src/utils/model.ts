@@ -1,3 +1,9 @@
+import { shuffle } from "radash";
+
+export function multiApiKeyPolling(apiKeys = "") {
+  return shuffle(apiKeys.split(","))[0];
+}
+
 export function isThinkingModel(model: string) {
   return model.includes("thinking") || model.startsWith("gemini-2.5-pro");
 }
@@ -79,6 +85,23 @@ export function filterOpenAIModelList(modelList: string[]) {
     }
   });
   return [networkingModelList, nonNetworkingModelList];
+}
+
+export function filterPollinationsModelList(modelList: string[]) {
+  const recommendModelList: string[] = [];
+  const normalModelList: string[] = [];
+  modelList.filter((model) => {
+    if (
+      model.startsWith("openai") ||
+      model.startsWith("deepseek") ||
+      model.startsWith("searchgpt")
+    ) {
+      recommendModelList.push(model);
+    } else {
+      normalModelList.push(model);
+    }
+  });
+  return [recommendModelList, normalModelList];
 }
 
 export function getCustomModelList(customModelList: string[]) {

@@ -1,7 +1,14 @@
 "use client";
-import { useLayoutEffect, useState, useCallback, useMemo } from "react";
+import {
+  useLayoutEffect,
+  useState,
+  useCallback,
+  useMemo,
+  type ReactNode,
+  useEffect,
+} from "react";
 import { useTranslation } from "react-i18next";
-import { RefreshCw } from "lucide-react";
+import { RefreshCw, CircleHelp } from "lucide-react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
@@ -36,6 +43,12 @@ import {
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import useModel from "@/hooks/useModelList";
 import { useSettingStore } from "@/store/setting";
 import {
@@ -45,6 +58,7 @@ import {
   ANTHROPIC_BASE_URL,
   DEEPSEEK_BASE_URL,
   XAI_BASE_URL,
+  POLLINATIONS_BASE_URL,
   OLLAMA_BASE_URL,
   TAVILY_BASE_URL,
   FIRECRAWL_BASE_URL,
@@ -58,8 +72,9 @@ import {
   filterOpenRouterModelList,
   filterDeepSeekModelList,
   filterOpenAIModelList,
+  filterPollinationsModelList,
   getCustomModelList,
-} from "@/utils/models";
+} from "@/utils/model";
 import { researchStore } from "@/utils/storage";
 import { cn } from "@/utils/style";
 import { omit, capitalize } from "radash";
@@ -81,8 +96,8 @@ const formSchema = z.object({
   mode: z.string().optional(),
   apiKey: z.string().optional(),
   apiProxy: z.string().optional(),
-  thinkingModel: z.string(),
-  networkingModel: z.string(),
+  thinkingModel: z.string().optional(),
+  networkingModel: z.string().optional(),
   openRouterApiKey: z.string().optional(),
   openRouterApiProxy: z.string().optional(),
   openRouterThinkingModel: z.string().optional(),
@@ -107,6 +122,9 @@ const formSchema = z.object({
   openAICompatibleApiProxy: z.string().optional(),
   openAICompatibleThinkingModel: z.string().optional(),
   openAICompatibleNetworkingModel: z.string().optional(),
+  pollinationsApiProxy: z.string().optional(),
+  pollinationsThinkingModel: z.string().optional(),
+  pollinationsNetworkingModel: z.string().optional(),
   ollamaApiProxy: z.string().optional(),
   ollamaThinkingModel: z.string().optional(),
   ollamaNetworkingModel: z.string().optional(),
@@ -138,11 +156,46 @@ function convertModelName(name: string) {
 
 let preLoading = false;
 
+function HelpTip({ children, tip }: { children: ReactNode; tip: string }) {
+  const [open, setOpen] = useState<boolean>(false);
+  const handleOpen = () => {
+    setOpen(true);
+    setTimeout(() => {
+      setOpen(false);
+    }, 2000);
+  };
+
+  return (
+    <div className="flex items-center">
+      <span className="flex-1">{children}</span>
+      <TooltipProvider delayDuration={100}>
+        <Tooltip open={open} onOpenChange={(opened) => setOpen(opened)}>
+          <TooltipTrigger asChild>
+            <CircleHelp
+              className="cursor-help w-4 h-4 ml-1 opacity-50 max-sm:ml-0"
+              onClick={(ev) => {
+                ev.preventDefault();
+                ev.stopPropagation();
+                handleOpen();
+              }}
+            />
+          </TooltipTrigger>
+          <TooltipContent className="max-w-52">
+            <p>{tip}</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    </div>
+  );
+}
+
 function Setting({ open, onClose }: SettingProps) {
   const { t } = useTranslation();
   const { mode, provider, searchProvider, update } = useSettingStore();
   const { modelList, refresh } = useModel();
+  const [unprotected, setUnprotected] = useState<boolean>(false);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+
   const thinkingModelList = useMemo(() => {
     const { provider } = useSettingStore.getState();
     if (provider === "google") {
@@ -151,6 +204,8 @@ function Setting({ open, onClose }: SettingProps) {
       return filterOpenRouterModelList(modelList);
     } else if (provider === "deepseek") {
       return filterDeepSeekModelList(modelList);
+    } else if (provider === "pollinations") {
+      return filterPollinationsModelList(modelList);
     }
     return [[], modelList];
   }, [modelList]);
@@ -162,6 +217,8 @@ function Setting({ open, onClose }: SettingProps) {
       return filterOpenRouterModelList(modelList);
     } else if (provider === "openai") {
       return filterOpenAIModelList(modelList);
+    } else if (provider === "pollinations") {
+      return filterPollinationsModelList(modelList);
     }
     return [[], modelList];
   }, [modelList]);
@@ -266,10 +323,17 @@ function Setting({ open, onClose }: SettingProps) {
     });
   }
 
+  useEffect(() => {
+    if (modelList.length > 0) {
+      const { accessPassword } = useSettingStore.getState();
+      if (accessPassword === "") setUnprotected(true);
+    }
+  }, [modelList]);
+
   useLayoutEffect(() => {
     if (open && !preLoading) {
-      fetchModelList();
       preLoading = true;
+      fetchModelList();
     }
   }, [open, fetchModelList]);
 
@@ -311,7 +375,9 @@ function Setting({ open, onClose }: SettingProps) {
                     render={({ field }) => (
                       <FormItem className="from-item">
                         <FormLabel className="col-span-1">
-                          {t("setting.mode")}
+                          <HelpTip tip={t("setting.modeTip")}>
+                            {t("setting.mode")}
+                          </HelpTip>
                         </FormLabel>
                         <FormControl>
                           <Select
@@ -344,7 +410,9 @@ function Setting({ open, onClose }: SettingProps) {
                   render={({ field }) => (
                     <FormItem className="from-item">
                       <FormLabel className="col-span-1">
-                        {t("setting.provider")}
+                        <HelpTip tip={t("setting.providerTip")}>
+                          {t("setting.provider")}
+                        </HelpTip>
                       </FormLabel>
                       <FormControl>
                         <Select
@@ -387,6 +455,11 @@ function Setting({ open, onClose }: SettingProps) {
                                 {t("setting.openAICompatible")}
                               </SelectItem>
                             ) : null}
+                            {!isDisabledAIProvider("pollinations") ? (
+                              <SelectItem value="pollinations">
+                                Pollinations ({t("setting.free")})
+                              </SelectItem>
+                            ) : null}
                             {!isDisabledAIProvider("ollama") ? (
                               <SelectItem value="ollama">Ollama</SelectItem>
                             ) : null}
@@ -409,7 +482,9 @@ function Setting({ open, onClose }: SettingProps) {
                         <FormItem className="from-item">
                           <FormLabel className="col-span-1">
                             {t("setting.apiKeyLabel")}
-                            <span className="ml-1 text-red-500">*</span>
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
                           </FormLabel>
                           <FormControl className="col-span-3">
                             <Password
@@ -463,7 +538,9 @@ function Setting({ open, onClose }: SettingProps) {
                         <FormItem className="from-item">
                           <FormLabel className="col-span-1">
                             {t("setting.apiKeyLabel")}
-                            <span className="ml-1 text-red-500">*</span>
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
                           </FormLabel>
                           <FormControl className="col-span-3">
                             <Password
@@ -517,7 +594,9 @@ function Setting({ open, onClose }: SettingProps) {
                         <FormItem className="from-item">
                           <FormLabel className="col-span-1">
                             {t("setting.apiKeyLabel")}
-                            <span className="ml-1 text-red-500">*</span>
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
                           </FormLabel>
                           <FormControl className="col-span-3">
                             <Password
@@ -571,7 +650,9 @@ function Setting({ open, onClose }: SettingProps) {
                         <FormItem className="from-item">
                           <FormLabel className="col-span-1">
                             {t("setting.apiKeyLabel")}
-                            <span className="ml-1 text-red-500">*</span>
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
                           </FormLabel>
                           <FormControl className="col-span-3">
                             <Password
@@ -625,7 +706,9 @@ function Setting({ open, onClose }: SettingProps) {
                         <FormItem className="from-item">
                           <FormLabel className="col-span-1">
                             {t("setting.apiKeyLabel")}
-                            <span className="ml-1 text-red-500">*</span>
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
                           </FormLabel>
                           <FormControl className="col-span-3">
                             <Password
@@ -679,7 +762,9 @@ function Setting({ open, onClose }: SettingProps) {
                         <FormItem className="from-item">
                           <FormLabel className="col-span-1">
                             {t("setting.apiKeyLabel")}
-                            <span className="ml-1 text-red-500">*</span>
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
                           </FormLabel>
                           <FormControl className="col-span-3">
                             <Password
@@ -733,7 +818,9 @@ function Setting({ open, onClose }: SettingProps) {
                         <FormItem className="from-item">
                           <FormLabel className="col-span-1">
                             {t("setting.apiKeyLabel")}
-                            <span className="ml-1 text-red-500">*</span>
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
                           </FormLabel>
                           <FormControl className="col-span-3">
                             <Password
@@ -767,6 +854,35 @@ function Setting({ open, onClose }: SettingProps) {
                                 updateSetting(
                                   "openAICompatibleApiProxy",
                                   form.getValues("openAICompatibleApiProxy")
+                                )
+                              }
+                            />
+                          </FormControl>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                  <div
+                    className={cn("space-y-4", {
+                      hidden: provider !== "pollinations",
+                    })}
+                  >
+                    <FormField
+                      control={form.control}
+                      name="pollinationsApiProxy"
+                      render={({ field }) => (
+                        <FormItem className="from-item">
+                          <FormLabel className="col-span-1">
+                            {t("setting.apiUrlLabel")}
+                          </FormLabel>
+                          <FormControl className="col-span-3">
+                            <Input
+                              placeholder={POLLINATIONS_BASE_URL}
+                              {...field}
+                              onBlur={() =>
+                                updateSetting(
+                                  "pollinationsApiProxy",
+                                  form.getValues("pollinationsApiProxy")
                                 )
                               }
                             />
@@ -816,13 +932,20 @@ function Setting({ open, onClose }: SettingProps) {
                     render={({ field }) => (
                       <FormItem className="from-item">
                         <FormLabel className="col-span-1">
-                          {t("setting.accessPassword")}
-                          <span className="ml-1 text-red-500">*</span>
+                          <HelpTip tip={t("setting.accessPasswordTip")}>
+                            {t("setting.accessPassword")}
+                            {!unprotected ? (
+                              <span className="ml-1 text-red-500 max-sm:hidden">
+                                *
+                              </span>
+                            ) : null}
+                          </HelpTip>
                         </FormLabel>
                         <FormControl className="col-span-3">
                           <Password
                             type="text"
                             placeholder={t("setting.accessPasswordPlaceholder")}
+                            disabled={unprotected}
                             {...field}
                             onBlur={() =>
                               updateSetting(
@@ -847,8 +970,12 @@ function Setting({ open, onClose }: SettingProps) {
                     render={({ field }) => (
                       <FormItem className="from-item">
                         <FormLabel className="col-span-1">
-                          {t("setting.thinkingModel")}
-                          <span className="ml-1 text-red-500">*</span>
+                          <HelpTip tip={t("setting.thinkingModelTip")}>
+                            {t("setting.thinkingModel")}
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
+                          </HelpTip>
                         </FormLabel>
                         <FormControl>
                           <div className="col-span-3 w-full">
@@ -927,8 +1054,12 @@ function Setting({ open, onClose }: SettingProps) {
                     render={({ field }) => (
                       <FormItem className="from-item">
                         <FormLabel className="col-span-1">
-                          {t("setting.networkingModel")}
-                          <span className="ml-1 text-red-500">*</span>
+                          <HelpTip tip={t("setting.networkingModelTip")}>
+                            {t("setting.networkingModel")}
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
+                          </HelpTip>
                         </FormLabel>
                         <FormControl>
                           <div className="col-span-3 w-full">
@@ -1013,8 +1144,12 @@ function Setting({ open, onClose }: SettingProps) {
                     render={({ field }) => (
                       <FormItem className="from-item">
                         <FormLabel className="col-span-1">
-                          {t("setting.thinkingModel")}
-                          <span className="ml-1 text-red-500">*</span>
+                          <HelpTip tip={t("setting.thinkingModelTip")}>
+                            {t("setting.thinkingModel")}
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
+                          </HelpTip>
                         </FormLabel>
                         <FormControl>
                           <div className="col-span-3 w-full">
@@ -1093,8 +1228,12 @@ function Setting({ open, onClose }: SettingProps) {
                     render={({ field }) => (
                       <FormItem className="from-item">
                         <FormLabel className="col-span-1">
-                          {t("setting.networkingModel")}
-                          <span className="ml-1 text-red-500">*</span>
+                          <HelpTip tip={t("setting.networkingModelTip")}>
+                            {t("setting.networkingModel")}
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
+                          </HelpTip>
                         </FormLabel>
                         <FormControl>
                           <div className="col-span-3 w-full">
@@ -1179,8 +1318,12 @@ function Setting({ open, onClose }: SettingProps) {
                     render={({ field }) => (
                       <FormItem className="from-item">
                         <FormLabel className="col-span-1">
-                          {t("setting.thinkingModel")}
-                          <span className="ml-1 text-red-500">*</span>
+                          <HelpTip tip={t("setting.thinkingModelTip")}>
+                            {t("setting.thinkingModel")}
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
+                          </HelpTip>
                         </FormLabel>
                         <FormControl>
                           <div className="col-span-3 w-full">
@@ -1259,8 +1402,12 @@ function Setting({ open, onClose }: SettingProps) {
                     render={({ field }) => (
                       <FormItem className="from-item">
                         <FormLabel className="col-span-1">
-                          {t("setting.networkingModel")}
-                          <span className="ml-1 text-red-500">*</span>
+                          <HelpTip tip={t("setting.networkingModelTip")}>
+                            {t("setting.networkingModel")}
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
+                          </HelpTip>
                         </FormLabel>
                         <FormControl>
                           <div className="col-span-3 w-full">
@@ -1345,8 +1492,12 @@ function Setting({ open, onClose }: SettingProps) {
                     render={({ field }) => (
                       <FormItem className="from-item">
                         <FormLabel className="col-span-1">
-                          {t("setting.thinkingModel")}
-                          <span className="ml-1 text-red-500">*</span>
+                          <HelpTip tip={t("setting.thinkingModelTip")}>
+                            {t("setting.thinkingModel")}
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
+                          </HelpTip>
                         </FormLabel>
                         <FormControl>
                           <div className="col-span-3 w-full">
@@ -1406,8 +1557,12 @@ function Setting({ open, onClose }: SettingProps) {
                     render={({ field }) => (
                       <FormItem className="from-item">
                         <FormLabel className="col-span-1">
-                          {t("setting.networkingModel")}
-                          <span className="ml-1 text-red-500">*</span>
+                          <HelpTip tip={t("setting.networkingModelTip")}>
+                            {t("setting.networkingModel")}
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
+                          </HelpTip>
                         </FormLabel>
                         <FormControl>
                           <div className="col-span-3 w-full">
@@ -1473,8 +1628,12 @@ function Setting({ open, onClose }: SettingProps) {
                     render={({ field }) => (
                       <FormItem className="from-item">
                         <FormLabel className="col-span-1">
-                          {t("setting.thinkingModel")}
-                          <span className="ml-1 text-red-500">*</span>
+                          <HelpTip tip={t("setting.thinkingModelTip")}>
+                            {t("setting.thinkingModel")}
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
+                          </HelpTip>
                         </FormLabel>
                         <FormControl>
                           <div className="col-span-3 w-full">
@@ -1553,8 +1712,12 @@ function Setting({ open, onClose }: SettingProps) {
                     render={({ field }) => (
                       <FormItem className="from-item">
                         <FormLabel className="col-span-1">
-                          {t("setting.networkingModel")}
-                          <span className="ml-1 text-red-500">*</span>
+                          <HelpTip tip={t("setting.networkingModelTip")}>
+                            {t("setting.networkingModel")}
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
+                          </HelpTip>
                         </FormLabel>
                         <FormControl>
                           <div className="col-span-3 w-full">
@@ -1639,8 +1802,12 @@ function Setting({ open, onClose }: SettingProps) {
                     render={({ field }) => (
                       <FormItem className="from-item">
                         <FormLabel className="col-span-1">
-                          {t("setting.thinkingModel")}
-                          <span className="ml-1 text-red-500">*</span>
+                          <HelpTip tip={t("setting.thinkingModelTip")}>
+                            {t("setting.thinkingModel")}
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
+                          </HelpTip>
                         </FormLabel>
                         <FormControl>
                           <div className="col-span-3 w-full">
@@ -1700,8 +1867,12 @@ function Setting({ open, onClose }: SettingProps) {
                     render={({ field }) => (
                       <FormItem className="from-item">
                         <FormLabel className="col-span-1">
-                          {t("setting.networkingModel")}
-                          <span className="ml-1 text-red-500">*</span>
+                          <HelpTip tip={t("setting.networkingModelTip")}>
+                            {t("setting.networkingModel")}
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
+                          </HelpTip>
                         </FormLabel>
                         <FormControl>
                           <div className="col-span-3 w-full">
@@ -1767,8 +1938,12 @@ function Setting({ open, onClose }: SettingProps) {
                     render={({ field }) => (
                       <FormItem className="from-item">
                         <FormLabel className="col-span-1">
-                          {t("setting.thinkingModel")}
-                          <span className="ml-1 text-red-500">*</span>
+                          <HelpTip tip={t("setting.thinkingModelTip")}>
+                            {t("setting.thinkingModel")}
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
+                          </HelpTip>
                         </FormLabel>
                         <FormControl>
                           <div className="col-span-3 flex gap-2">
@@ -1828,8 +2003,12 @@ function Setting({ open, onClose }: SettingProps) {
                     render={({ field }) => (
                       <FormItem className="from-item">
                         <FormLabel className="col-span-1">
-                          {t("setting.networkingModel")}
-                          <span className="ml-1 text-red-500">*</span>
+                          <HelpTip tip={t("setting.networkingModelTip")}>
+                            {t("setting.networkingModel")}
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
+                          </HelpTip>
                         </FormLabel>
                         <FormControl>
                           <div className="col-span-3 w-full flex gap-2">
@@ -1886,17 +2065,21 @@ function Setting({ open, onClose }: SettingProps) {
                 </div>
                 <div
                   className={cn("space-y-4", {
-                    hidden: provider !== "ollama",
+                    hidden: provider !== "pollinations",
                   })}
                 >
                   <FormField
                     control={form.control}
-                    name="ollamaThinkingModel"
+                    name="pollinationsThinkingModel"
                     render={({ field }) => (
                       <FormItem className="from-item">
                         <FormLabel className="col-span-1">
-                          {t("setting.thinkingModel")}
-                          <span className="ml-1 text-red-500">*</span>
+                          <HelpTip tip={t("setting.thinkingModelTip")}>
+                            {t("setting.thinkingModel")}
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
+                          </HelpTip>
                         </FormLabel>
                         <FormControl>
                           <div className="col-span-3 w-full">
@@ -1916,13 +2099,32 @@ function Setting({ open, onClose }: SettingProps) {
                                 />
                               </SelectTrigger>
                               <SelectContent className="max-sm:max-h-72">
-                                {modelList.map((name) => {
-                                  return !isDisabledAIModel(name) ? (
-                                    <SelectItem key={name} value={name}>
-                                      {convertModelName(name)}
-                                    </SelectItem>
-                                  ) : null;
-                                })}
+                                {thinkingModelList[0].length > 0 ? (
+                                  <SelectGroup>
+                                    <SelectLabel>
+                                      {t("setting.recommendedModels")}
+                                    </SelectLabel>
+                                    {thinkingModelList[0].map((name) => {
+                                      return !isDisabledAIModel(name) ? (
+                                        <SelectItem key={name} value={name}>
+                                          {convertModelName(name)}
+                                        </SelectItem>
+                                      ) : null;
+                                    })}
+                                  </SelectGroup>
+                                ) : null}
+                                <SelectGroup>
+                                  <SelectLabel>
+                                    {t("setting.basicModels")}
+                                  </SelectLabel>
+                                  {thinkingModelList[1].map((name) => {
+                                    return !isDisabledAIModel(name) ? (
+                                      <SelectItem key={name} value={name}>
+                                        {convertModelName(name)}
+                                      </SelectItem>
+                                    ) : null;
+                                  })}
+                                </SelectGroup>
                               </SelectContent>
                             </Select>
                             <Button
@@ -1952,12 +2154,16 @@ function Setting({ open, onClose }: SettingProps) {
                   />
                   <FormField
                     control={form.control}
-                    name="ollamaNetworkingModel"
+                    name="pollinationsNetworkingModel"
                     render={({ field }) => (
                       <FormItem className="from-item">
                         <FormLabel className="col-span-1">
-                          {t("setting.networkingModel")}
-                          <span className="ml-1 text-red-500">*</span>
+                          <HelpTip tip={t("setting.networkingModelTip")}>
+                            {t("setting.networkingModel")}
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
+                          </HelpTip>
                         </FormLabel>
                         <FormControl>
                           <div className="col-span-3 w-full">
@@ -1977,13 +2183,32 @@ function Setting({ open, onClose }: SettingProps) {
                                 />
                               </SelectTrigger>
                               <SelectContent className="max-sm:max-h-72">
-                                {modelList.map((name) => {
-                                  return !isDisabledAIModel(name) ? (
-                                    <SelectItem key={name} value={name}>
-                                      {convertModelName(name)}
-                                    </SelectItem>
-                                  ) : null;
-                                })}
+                                {networkingModelList[0].length > 0 ? (
+                                  <SelectGroup>
+                                    <SelectLabel>
+                                      {t("setting.recommendedModels")}
+                                    </SelectLabel>
+                                    {networkingModelList[0].map((name) => {
+                                      return !isDisabledAIModel(name) ? (
+                                        <SelectItem key={name} value={name}>
+                                          {convertModelName(name)}
+                                        </SelectItem>
+                                      ) : null;
+                                    })}
+                                  </SelectGroup>
+                                ) : null}
+                                <SelectGroup>
+                                  <SelectLabel>
+                                    {t("setting.basicModels")}
+                                  </SelectLabel>
+                                  {networkingModelList[1].map((name) => {
+                                    return !isDisabledAIModel(name) ? (
+                                      <SelectItem key={name} value={name}>
+                                        {convertModelName(name)}
+                                      </SelectItem>
+                                    ) : null;
+                                  })}
+                                </SelectGroup>
                               </SelectContent>
                             </Select>
                             <Button
@@ -2012,6 +2237,142 @@ function Setting({ open, onClose }: SettingProps) {
                     )}
                   />
                 </div>
+                <div
+                  className={cn("space-y-4", {
+                    hidden: provider !== "ollama",
+                  })}
+                >
+                  <FormField
+                    control={form.control}
+                    name="ollamaThinkingModel"
+                    render={({ field }) => (
+                      <FormItem className="from-item">
+                        <FormLabel className="col-span-1">
+                          <HelpTip tip={t("setting.thinkingModelTip")}>
+                            {t("setting.thinkingModel")}
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
+                          </HelpTip>
+                        </FormLabel>
+                        <FormControl>
+                          <div className="col-span-3 flex gap-2">
+                            <Input
+                              className={cn("flex-1", {
+                                hidden: modelList.length > 0,
+                              })}
+                              placeholder={t("setting.modelListPlaceholder")}
+                              {...field}
+                            />
+                            <div
+                              className={cn("flex-1", {
+                                hidden: modelList.length === 0,
+                              })}
+                            >
+                              <Select
+                                defaultValue={field.value}
+                                onValueChange={field.onChange}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue
+                                    placeholder={t(
+                                      "setting.modelListLoadingPlaceholder"
+                                    )}
+                                  />
+                                </SelectTrigger>
+                                <SelectContent className="max-sm:max-h-72">
+                                  {modelList.map((name) => {
+                                    return !isDisabledAIModel(name) ? (
+                                      <SelectItem key={name} value={name}>
+                                        {convertModelName(name)}
+                                      </SelectItem>
+                                    ) : null;
+                                  })}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              disabled={isRefreshing}
+                              onClick={() => fetchModelList()}
+                            >
+                              <RefreshCw
+                                className={isRefreshing ? "animate-spin" : ""}
+                              />
+                            </Button>
+                          </div>
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={form.control}
+                    name="ollamaNetworkingModel"
+                    render={({ field }) => (
+                      <FormItem className="from-item">
+                        <FormLabel className="col-span-1">
+                          <HelpTip tip={t("setting.networkingModelTip")}>
+                            {t("setting.networkingModel")}
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
+                          </HelpTip>
+                        </FormLabel>
+                        <FormControl>
+                          <div className="col-span-3 w-full flex gap-2">
+                            <Input
+                              className={cn("flex-1", {
+                                hidden: modelList.length > 0,
+                              })}
+                              placeholder={t("setting.modelListPlaceholder")}
+                              {...field}
+                            />
+                            <div
+                              className={cn("flex-1", {
+                                hidden: modelList.length === 0,
+                              })}
+                            >
+                              <Select
+                                defaultValue={field.value}
+                                onValueChange={field.onChange}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue
+                                    placeholder={t(
+                                      "setting.modelListLoadingPlaceholder"
+                                    )}
+                                  />
+                                </SelectTrigger>
+                                <SelectContent className="max-sm:max-h-72">
+                                  {modelList.map((name) => {
+                                    return !isDisabledAIModel(name) ? (
+                                      <SelectItem key={name} value={name}>
+                                        {convertModelName(name)}
+                                      </SelectItem>
+                                    ) : null;
+                                  })}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              disabled={isRefreshing}
+                              onClick={() => fetchModelList()}
+                            >
+                              <RefreshCw
+                                className={isRefreshing ? "animate-spin" : ""}
+                              />
+                            </Button>
+                          </div>
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                </div>
               </TabsContent>
               <TabsContent className="space-y-4" value="search">
                 <FormField
@@ -2020,7 +2381,9 @@ function Setting({ open, onClose }: SettingProps) {
                   render={({ field }) => (
                     <FormItem className="from-item">
                       <FormLabel className="col-span-1">
-                        {t("setting.webSearch")}
+                        <HelpTip tip={t("setting.webSearchTip")}>
+                          {t("setting.webSearch")}
+                        </HelpTip>
                       </FormLabel>
                       <FormControl>
                         <Select
@@ -2049,7 +2412,9 @@ function Setting({ open, onClose }: SettingProps) {
                   render={({ field }) => (
                     <FormItem className="from-item">
                       <FormLabel className="col-span-1">
-                        {t("setting.searchProvider")}
+                        <HelpTip tip={t("setting.searchProviderTip")}>
+                          {t("setting.searchProvider")}
+                        </HelpTip>
                       </FormLabel>
                       <FormControl>
                         <Select
@@ -2075,7 +2440,8 @@ function Setting({ open, onClose }: SettingProps) {
                                 Firecrawl
                               </SelectItem>
                             ) : null}
-                            {!isDisabledSearchProvider("exa") ? (
+                            {!isDisabledSearchProvider("exa") &&
+                            mode === "proxy" ? (
                               <SelectItem value="exa">Exa</SelectItem>
                             ) : null}
                             {!isDisabledSearchProvider("bocha") ? (
@@ -2105,7 +2471,9 @@ function Setting({ open, onClose }: SettingProps) {
                         <FormItem className="from-item">
                           <FormLabel className="col-span-1">
                             {t("setting.apiKeyLabel")}
-                            <span className="ml-1 text-red-500">*</span>
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
                           </FormLabel>
                           <FormControl className="col-span-3">
                             <Password
@@ -2149,7 +2517,9 @@ function Setting({ open, onClose }: SettingProps) {
                         <FormItem className="from-item">
                           <FormLabel className="col-span-1">
                             {t("setting.apiKeyLabel")}
-                            <span className="ml-1 text-red-500">*</span>
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
                           </FormLabel>
                           <FormControl className="col-span-3">
                             <Password
@@ -2193,7 +2563,9 @@ function Setting({ open, onClose }: SettingProps) {
                         <FormItem className="from-item">
                           <FormLabel className="col-span-1">
                             {t("setting.apiKeyLabel")}
-                            <span className="ml-1 text-red-500">*</span>
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
                           </FormLabel>
                           <FormControl className="col-span-3">
                             <Password
@@ -2237,7 +2609,9 @@ function Setting({ open, onClose }: SettingProps) {
                         <FormItem className="from-item">
                           <FormLabel className="col-span-1">
                             {t("setting.apiKeyLabel")}
-                            <span className="ml-1 text-red-500">*</span>
+                            <span className="ml-1 text-red-500 max-sm:hidden">
+                              *
+                            </span>
                           </FormLabel>
                           <FormControl className="col-span-3">
                             <Password
@@ -2300,7 +2674,9 @@ function Setting({ open, onClose }: SettingProps) {
                   render={({ field }) => (
                     <FormItem className="from-item">
                       <FormLabel className="col-span-1">
-                        {t("setting.parallelSearch")}
+                        <HelpTip tip={t("setting.parallelSearchTip")}>
+                          {t("setting.parallelSearch")}
+                        </HelpTip>
                       </FormLabel>
                       <FormControl className="col-span-3">
                         <div className="flex h-10">
@@ -2329,7 +2705,9 @@ function Setting({ open, onClose }: SettingProps) {
                   render={({ field }) => (
                     <FormItem className="from-item">
                       <FormLabel className="col-span-1">
-                        {t("setting.searchResults")}
+                        <HelpTip tip={t("setting.searchResultsTip")}>
+                          {t("setting.searchResults")}
+                        </HelpTip>
                       </FormLabel>
                       <FormControl className="col-span-3">
                         <div className="flex h-10">

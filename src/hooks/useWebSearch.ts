@@ -6,8 +6,11 @@ import {
   BOCHA_BASE_URL,
   SEARXNG_BASE_URL,
 } from "@/constants/urls";
+import { informationCollectorPrompt } from "@/utils/deep-research";
+import { multiApiKeyPolling } from "@/utils/model";
+import { generateSignature } from "@/utils/signature";
 import { completePath } from "@/utils/url";
-import { pick, shuffle } from "radash";
+import { pick } from "radash";
 
 type TavilySearchOptions = {
   searchDepth?: "basic" | "advanced";
@@ -213,8 +216,9 @@ function useWebSearch() {
       searchMaxResult,
       accessPassword,
     } = useSettingStore.getState();
+    const accessKey = generateSignature(accessPassword, Date.now());
+    const tavilyKey = multiApiKeyPolling(tavilyApiKey);
 
-    const tavilyApiKeys = shuffle(tavilyApiKey.split(","));
     const response = await fetch(
       mode === "local"
         ? `${completePath(tavilyApiProxy || TAVILY_BASE_URL)}/search`
@@ -223,10 +227,9 @@ function useWebSearch() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${
-            mode === "local" ? tavilyApiKeys[0] : accessPassword
-          }`,
+          Authorization: `Bearer ${mode === "local" ? tavilyKey : accessKey}`,
         },
+        credentials: "omit",
         body: JSON.stringify({
           query,
           searchDepth: "basic",
@@ -260,8 +263,9 @@ function useWebSearch() {
       language,
       accessPassword,
     } = useSettingStore.getState();
+    const accessKey = generateSignature(accessPassword, Date.now());
+    const firecrawlKey = multiApiKeyPolling(firecrawlApiKey);
 
-    const firecrawlApiKeys = shuffle(firecrawlApiKey.split(","));
     const languageMeta = language.split("-");
     const response = await fetch(
       mode === "local"
@@ -275,9 +279,10 @@ function useWebSearch() {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${
-            mode === "local" ? firecrawlApiKeys[0] : accessPassword
+            mode === "local" ? firecrawlKey : accessKey
           }`,
         },
+        credentials: "omit",
         body: JSON.stringify({
           query,
           lang: languageMeta[0].toLowerCase(),
@@ -305,8 +310,9 @@ function useWebSearch() {
   async function exa(query: string, options: ExaSearchOptions = {}) {
     const { mode, exaApiKey, exaApiProxy, searchMaxResult, accessPassword } =
       useSettingStore.getState();
+    const accessKey = generateSignature(accessPassword, Date.now());
+    const exaKey = multiApiKeyPolling(exaApiKey);
 
-    const exaApiKeys = shuffle(exaApiKey.split(","));
     const response = await fetch(
       mode === "local"
         ? `${completePath(exaApiProxy || EXA_BASE_URL)}/search`
@@ -315,15 +321,17 @@ function useWebSearch() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${
-            mode === "local" ? exaApiKeys[0] : accessPassword
-          }`,
+          Authorization: `Bearer ${mode === "local" ? exaKey : accessKey}`,
         },
+        credentials: "omit",
         body: JSON.stringify({
           query,
           category: "research paper",
           contents: {
             text: true,
+            summary: {
+              query: informationCollectorPrompt(query),
+            },
             numResults: Number(searchMaxResult) * 5,
             livecrawl: "auto",
           },
@@ -349,8 +357,9 @@ function useWebSearch() {
       searchMaxResult,
       accessPassword,
     } = useSettingStore.getState();
+    const accessKey = generateSignature(accessPassword, Date.now());
+    const bochaKey = multiApiKeyPolling(bochaApiKey);
 
-    const bochaApiKeys = shuffle(bochaApiKey.split(","));
     const response = await fetch(
       mode === "local"
         ? `${completePath(bochaApiProxy || BOCHA_BASE_URL, "/v1")}/web-search`
@@ -359,10 +368,9 @@ function useWebSearch() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${
-            mode === "local" ? bochaApiKeys[0] : accessPassword
-          }`,
+          Authorization: `Bearer ${mode === "local" ? bochaKey : accessKey}`,
         },
+        credentials: "omit",
         body: JSON.stringify({
           query,
           freshness: "noLimit",
@@ -386,10 +394,11 @@ function useWebSearch() {
   async function searxng(query: string, options: SearxngSearchOptions = {}) {
     const { mode, searxngApiProxy, searchMaxResult, accessPassword } =
       useSettingStore.getState();
+    const accessKey = generateSignature(accessPassword, Date.now());
 
     const headers: HeadersInit = {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${accessPassword}`,
+      Authorization: `Bearer ${accessKey}`,
     };
     const params = {
       q: query,
@@ -411,7 +420,9 @@ function useWebSearch() {
           ? "/api/search/searxng/search"
           : `${completePath(searxngApiProxy || SEARXNG_BASE_URL)}/search`
       }?${searchQuery.toString()}`,
-      mode === "proxy" ? { method: "POST", headers } : undefined
+      mode === "proxy"
+        ? { method: "POST", credentials: "omit", headers }
+        : { credentials: "omit" }
     );
     const { results = [] } = await response.json();
     return (results as SearxngSearchResult[])

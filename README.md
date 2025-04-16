@@ -16,7 +16,7 @@
 
 **Lightning-Fast Deep Research Report**
 
-Deep Research is a cutting-edge project built with Next.js 15, leveraging the power of AI models to generate in-depth research reports in approximately 2 minutes. Utilizing advanced "Thinking" and "Flash" models with internet access, Deep Research provides rapid and insightful analysis on a wide range of topics. Your privacy is paramount – all data can be processed and stored locally.
+Deep Research uses a variety of powerful AI models to generate in-depth research reports in just a few minutes. It leverages advanced "Thinking" and "Flash" models, combined with an internet connection, to provide fast and insightful analysis on a variety of topics. **Your privacy is paramount - all data is processed and stored locally.**
 
 ## ✨ Features
 
@@ -44,7 +44,7 @@ Deep Research is a cutting-edge project built with Next.js 15, leveraging the po
 
 ## 🚀 Getting Started
 
-### Use Gemini
+### Use Free Gemini (recommend)
 
 1. Get [Gemini API Key](https://aistudio.google.com/app/apikey)
 2. One-click deployment of the project, you can choose to deploy to Vercel or Cloudflare
@@ -189,13 +189,15 @@ Please refer to the file `env.tpl` for all available environment variables.
 
 - **Make variables effective:** After adding or modifying this environment variable, please redeploy the project for the changes to take effect.
 
+## 🙋 FAQs
+
+- Why does my Ollama or SearXNG not work properly and displays the error `TypeError: Failed to fetch`?
+
+If your request generates `CORS` due to browser security restrictions, you need to configure parameters for Ollama or SearXNG to allow cross-domain requests. You can also consider using the server proxy mode, which is a backend server that makes requests, which can effectively avoid cross-domain issues.
+
 ## 🛡️ Privacy
 
 Deep Research is designed with your privacy in mind. **All research data and generated reports are stored locally on your machine.** We do not collect or transmit any of your research data to external servers (unless you are explicitly using server-side API calls, in which case data is sent to Google's Gemini API through your configured proxy if any). Your privacy is our priority.
-
-## 📝 License
-
-Deep Research is released under the [MIT License](LICENSE). This license allows for free use, modification, and distribution for both commercial and non-commercial purposes.
 
 ## 🙏 Acknowledgements
 
@@ -218,3 +220,7 @@ For major changes, please open an issue first to discuss your proposed changes.
 ## ✉️ Contact
 
 If you have any questions, suggestions, or feedback, please create a new [issue](https://github.com/u14app/deep-research/issues).
+
+## 📝 License
+
+Deep Research is released under the [MIT License](LICENSE). This license allows for free use, modification, and distribution for both commercial and non-commercial purposes.
