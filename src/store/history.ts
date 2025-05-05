@@ -5,21 +5,21 @@ import { researchStore } from "@/utils/storage";
 import { customAlphabet } from "nanoid";
 import { clone, pick } from "radash";
 
-export interface ResearchHistory extends TaskStore {
+interface ResearchHistory extends TaskStore {
   createdAt: number;
   updatedAt?: number;
 }
 
-export interface HistoryStore {
+type HistoryStore = {
   history: ResearchHistory[];
-}
+};
 
-interface HistoryFunction {
+type HistoryFunction = {
   save: (taskStore: TaskStore) => string;
   load: (id: string) => TaskStore | void;
   update: (id: string, taskStore: TaskStore) => boolean;
   remove: (id: string) => boolean;
-}
+};
 
 const nanoid = customAlphabet("1234567890abcdefghijklmnopqrstuvwxyz", 12);
 

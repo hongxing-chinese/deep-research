@@ -50,10 +50,8 @@ export interface SettingStore {
   bochaApiKey: string;
   bochaApiProxy: string;
   searxngApiProxy: string;
-  searxngScope: string;
   parallelSearch: number;
   searchMaxResult: number;
-  crawler: string;
   language: string;
   theme: string;
   debug: string;
@@ -113,10 +111,8 @@ export const defaultValues: SettingStore = {
   bochaApiKey: "",
   bochaApiProxy: "",
   searxngApiProxy: "",
-  searxngScope: "all",
   parallelSearch: 1,
   searchMaxResult: 5,
-  crawler: "jina",
   language: "",
   theme: "system",
   debug: "disable",

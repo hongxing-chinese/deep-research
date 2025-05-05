@@ -6,7 +6,6 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { LoaderCircle } from "lucide-react";
-import { Button } from "@/components/Internal/Button";
 import {
   Form,
   FormControl,
@@ -15,11 +14,12 @@ import {
   FormLabel,
 } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
+import { Button } from "@/components/ui/button";
 import useDeepResearch from "@/hooks/useDeepResearch";
 import useAccurateTimer from "@/hooks/useAccurateTimer";
 import { useTaskStore } from "@/store/task";
 
-const MagicDown = dynamic(() => import("@/components/MagicDown"));
+const MilkdownEditor = dynamic(() => import("@/components/MilkdownEditor"));
 
 const formSchema = z.object({
   feedback: z.string(),
@@ -28,14 +28,13 @@ const formSchema = z.object({
 function Feedback() {
   const { t } = useTranslation();
   const taskStore = useTaskStore();
-  const { status, deepResearch, writeReportPlan } = useDeepResearch();
+  const { status, deepResearch } = useDeepResearch();
   const {
     formattedTime,
     start: accurateTimerStart,
     stop: accurateTimerStop,
   } = useAccurateTimer();
   const [isThinking, setIsThinking] = useState<boolean>(false);
-  const [isResearch, setIsResaerch] = useState<boolean>(false);
 
   const form = useForm<z.infer<typeof formSchema>>({
     resolver: zodResolver(formSchema),
@@ -44,16 +43,9 @@ function Feedback() {
     },
   });
 
-  async function startDeepResearch() {
-    try {
-      accurateTimerStart();
-      setIsResaerch(true);
-      await deepResearch();
-    } finally {
-      setIsResaerch(false);
-      accurateTimerStop();
-    }
-  }
+  useEffect(() => {
+    form.setValue("feedback", taskStore.feedback);
+  }, [taskStore.feedback, form]);
 
   async function handleSubmit(values: z.infer<typeof formSchema>) {
     const { question, questions, setFeedback } = useTaskStore.getState();
@@ -67,16 +59,12 @@ function Feedback() {
     try {
       accurateTimerStart();
       setIsThinking(true);
-      await writeReportPlan();
+      await deepResearch();
       setIsThinking(false);
     } finally {
       accurateTimerStop();
     }
   }
-
-  useEffect(() => {
-    form.setValue("feedback", taskStore.feedback);
-  }, [taskStore.feedback, form]);
 
   return (
     <section className="p-4 border rounded-md mt-4 print:hidden">
@@ -87,14 +75,11 @@ function Feedback() {
         <div>{t("research.feedback.emptyTip")}</div>
       ) : (
         <div>
-          <h4 className="mt-4 text-base font-semibold">
-            {t("research.feedback.questions")}
-          </h4>
-          <MagicDown
-            className="mt-2 min-h-20"
+          <MilkdownEditor
+            className="prose prose-slate dark:prose-invert max-w-full mt-6 min-h-20"
             value={taskStore.questions}
             onChange={(value) => taskStore.updateQuestions(value)}
-          ></MagicDown>
+          ></MilkdownEditor>
           <Form {...form}>
             <form onSubmit={form.handleSubmit(handleSubmit)}>
               <FormField
@@ -127,46 +112,14 @@ function Feedback() {
                     <span>{status}</span>
                     <small className="font-mono">{formattedTime}</small>
                   </>
-                ) : taskStore.reportPlan === "" ? (
-                  t("research.common.writeReportPlan")
                 ) : (
-                  t("research.common.rewriteReportPlan")
+                  t("research.common.startResearch")
                 )}
               </Button>
             </form>
           </Form>
         </div>
       )}
-      {taskStore.reportPlan !== "" ? (
-        <div className="mt-6">
-          <h4 className="text-base font-semibold">
-            {t("research.feedback.reportPlan")}
-          </h4>
-          <MagicDown
-            className="mt-2 min-h-20"
-            value={taskStore.reportPlan}
-            onChange={(value) => taskStore.updateReportPlan(value)}
-          ></MagicDown>
-          <Button
-            className="w-full mt-4"
-            variant="default"
-            onClick={() => startDeepResearch()}
-            disabled={isResearch}
-          >
-            {isResearch ? (
-              <>
-                <LoaderCircle className="animate-spin" />
-                <span>{status}</span>
-                <small className="font-mono">{formattedTime}</small>
-              </>
-            ) : taskStore.tasks.length === 0 ? (
-              t("research.common.startResearch")
-            ) : (
-              t("research.common.restartResearch")
-            )}
-          </Button>
-        </div>
-      ) : null}
     </section>
   );
 }

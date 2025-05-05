@@ -2,7 +2,6 @@ import { useState } from "react";
 import { streamText, smoothStream } from "ai";
 import { parsePartialJson } from "@ai-sdk/ui-utils";
 import { openai } from "@ai-sdk/openai";
-import { type GoogleGenerativeAIProviderMetadata } from "@ai-sdk/google";
 import { useTranslation } from "react-i18next";
 import Plimit from "p-limit";
 import { toast } from "sonner";
@@ -11,23 +10,20 @@ import useWebSearch from "@/hooks/useWebSearch";
 import { useTaskStore } from "@/store/task";
 import { useHistoryStore } from "@/store/history";
 import { useSettingStore } from "@/store/setting";
-import { useKnowledgeStore } from "@/store/knowledge";
-import { outputGuidelinesPrompt } from "@/constants/prompts";
 import {
   getSystemPrompt,
+  getOutputGuidelinesPrompt,
   generateQuestionsPrompt,
-  writeReportPlanPrompt,
   generateSerpQueriesPrompt,
   processResultPrompt,
   processSearchResultPrompt,
-  processSearchKnowledgeResultPrompt,
   reviewSerpQueriesPrompt,
   writeFinalReportPrompt,
   getSERPQuerySchema,
 } from "@/utils/deep-research";
 import { isNetworkingModel } from "@/utils/model";
 import { parseError } from "@/utils/error";
-import { pick, flat, unique } from "radash";
+import { pick, flat } from "radash";
 
 function getResponseLanguagePrompt(lang: string) {
   return `**Respond in ${lang}**`;
@@ -90,63 +86,6 @@ function useDeepResearch() {
     }
   }
 
-  async function writeReportPlan() {
-    const { language } = useSettingStore.getState();
-    const { query } = useTaskStore.getState();
-    const { thinkingModel } = getModel();
-    setStatus(t("research.common.thinking"));
-    const result = streamText({
-      model: createProvider(thinkingModel),
-      system: getSystemPrompt(),
-      prompt: [
-        writeReportPlanPrompt(query),
-        getResponseLanguagePrompt(language),
-      ].join("\n\n"),
-      experimental_transform: smoothTextStream(),
-      onError: handleError,
-    });
-    let content = "";
-    for await (const textPart of result.textStream) {
-      content += textPart;
-      taskStore.updateReportPlan(content);
-    }
-    return content;
-  }
-
-  async function searchLocalKnowledges(query: string, researchGoal: string) {
-    const { resources } = useTaskStore.getState();
-    const knowledgeStore = useKnowledgeStore.getState();
-    const { language } = useSettingStore.getState();
-    const knowledges: Knowledge[] = [];
-
-    for (const item of resources) {
-      if (item.status === "completed") {
-        const resource = knowledgeStore.get(item.id);
-        if (resource) {
-          knowledges.push(resource);
-        }
-      }
-    }
-
-    const { networkingModel } = getModel();
-    const searchResult = streamText({
-      model: createProvider(networkingModel),
-      system: getSystemPrompt(),
-      prompt: [
-        processSearchKnowledgeResultPrompt(query, researchGoal, knowledges),
-        getResponseLanguagePrompt(language),
-      ].join("\n\n"),
-      experimental_transform: smoothTextStream(),
-      onError: handleError,
-    });
-    let content = "";
-    for await (const textPart of searchResult.textStream) {
-      content += textPart;
-      taskStore.updateTask(query, { learning: content });
-    }
-    return content;
-  }
-
   async function runSearchTask(queries: SearchTask[]) {
     const {
       provider,
@@ -156,7 +95,6 @@ function useDeepResearch() {
       searchMaxResult,
       language,
     } = useSettingStore.getState();
-    const { resources } = useTaskStore.getState();
     const { networkingModel } = getModel();
     setStatus(t("research.common.research"));
     const plimit = Plimit(parallelSearch);
@@ -219,19 +157,6 @@ function useDeepResearch() {
           let searchResult;
           let sources: Source[] = [];
           taskStore.updateTask(item.query, { state: "processing" });
-          if (resources.length > 0) {
-            const knowledges = await searchLocalKnowledges(
-              item.query,
-              item.researchGoal
-            );
-            content += [
-              knowledges,
-              `### ${t("research.searchResult.references")}`,
-              resources.map((item) => `- ${item.name}`).join("\n"),
-              "---",
-              "",
-            ].join("\n\n");
-          }
           if (enableSearch) {
             if (searchProvider !== "model") {
               try {
@@ -288,10 +213,7 @@ function useDeepResearch() {
                 getResponseLanguagePrompt(language),
               ].join("\n\n"),
               experimental_transform: smoothTextStream(),
-              onError: (err) => {
-                taskStore.updateTask(item.query, { state: "failed" });
-                handleError(err);
-              },
+              onError: handleError,
             });
           }
           for await (const part of searchResult.fullStream) {
@@ -302,49 +224,9 @@ function useDeepResearch() {
               console.log("reasoning", part.textDelta);
             } else if (part.type === "source") {
               sources.push(part.source);
-            } else if (part.type === "finish") {
-              if (part.providerMetadata?.google) {
-                const { groundingMetadata } = part.providerMetadata.google;
-                const googleGroundingMetadata =
-                  groundingMetadata as GoogleGenerativeAIProviderMetadata["groundingMetadata"];
-                if (googleGroundingMetadata?.groundingSupports) {
-                  googleGroundingMetadata.groundingSupports.forEach(
-                    ({ segment, groundingChunkIndices }) => {
-                      if (segment.text && groundingChunkIndices) {
-                        const index = groundingChunkIndices.map(
-                          (idx: number) => `[${idx + 1}]`
-                        );
-                        content = content.replaceAll(
-                          segment.text,
-                          `${segment.text}${index.join("")}`
-                        );
-                      }
-                    }
-                  );
-                }
-              } else if (part.providerMetadata?.openai) {
-                // Fixed the problem that OpenAI cannot generate markdown reference link syntax properly in Chinese context
-                content = content.replaceAll("【", "[").replaceAll("】", "]");
-              }
             }
           }
-          if (sources.length > 0) {
-            content +=
-              "\n\n" +
-              sources
-                .map(
-                  (item, idx) =>
-                    `[${idx + 1}]: ${item.url}${
-                      item.title ? ` "${item.title.replaceAll('"', " ")}"` : ""
-                    }`
-                )
-                .join("\n");
-          }
-          taskStore.updateTask(item.query, {
-            state: "completed",
-            learning: content,
-            sources,
-          });
+          taskStore.updateTask(item.query, { state: "completed", sources });
           return content;
         });
       })
@@ -353,7 +235,7 @@ function useDeepResearch() {
 
   async function reviewSearchResult() {
     const { language } = useSettingStore.getState();
-    const { reportPlan, tasks, suggestion } = useTaskStore.getState();
+    const { query, tasks, suggestion } = useTaskStore.getState();
     const { thinkingModel } = getModel();
     setStatus(t("research.common.research"));
     const learnings = tasks.map((item) => item.learning);
@@ -361,7 +243,7 @@ function useDeepResearch() {
       model: createProvider(thinkingModel),
       system: getSystemPrompt(),
       prompt: [
-        reviewSerpQueriesPrompt(reportPlan, learnings, suggestion),
+        reviewSerpQueriesPrompt(query, learnings, suggestion),
         getResponseLanguagePrompt(language),
       ].join("\n\n"),
       experimental_transform: smoothTextStream(),
@@ -397,36 +279,17 @@ function useDeepResearch() {
 
   async function writeFinalReport() {
     const { language } = useSettingStore.getState();
-    const {
-      reportPlan,
-      tasks,
-      setId,
-      setTitle,
-      setSources,
-      requirement,
-      updateFinalReport,
-    } = useTaskStore.getState();
+    const { query, tasks, setId, setTitle, setSources, requirement } =
+      useTaskStore.getState();
     const { save } = useHistoryStore.getState();
     const { thinkingModel } = getModel();
     setStatus(t("research.common.writing"));
-    updateFinalReport("");
-    setTitle("");
-    setSources([]);
     const learnings = tasks.map((item) => item.learning);
-    const sources: Source[] = unique(
-      flat(tasks.map((item) => (item.sources ? item.sources : []))),
-      (item) => item.url
-    );
     const result = streamText({
       model: createProvider(thinkingModel),
-      system: [getSystemPrompt(), outputGuidelinesPrompt].join("\n\n"),
+      system: [getSystemPrompt(), getOutputGuidelinesPrompt()].join("\n\n"),
       prompt: [
-        writeFinalReportPrompt(
-          reportPlan,
-          learnings,
-          sources.map((item) => pick(item, ["title", "url"])),
-          requirement
-        ),
+        writeFinalReportPrompt(query, learnings, requirement),
         getResponseLanguagePrompt(language),
       ].join("\n\n"),
       experimental_transform: smoothTextStream(),
@@ -435,27 +298,17 @@ function useDeepResearch() {
     let content = "";
     for await (const textPart of result.textStream) {
       content += textPart;
-      updateFinalReport(content);
-    }
-    if (sources.length > 0) {
-      content +=
-        "\n\n" +
-        sources
-          .map(
-            (item, idx) =>
-              `[${idx + 1}]: ${item.url}${
-                item.title ? ` "${item.title.replaceAll('"', " ")}"` : ""
-              }`
-          )
-          .join("\n");
-      updateFinalReport(content);
+      taskStore.updateFinalReport(content);
     }
     const title = content
-      .split("\n")[0]
+      .split("\n\n")[0]
       .replaceAll("#", "")
-      .replaceAll("*", "")
+      .replaceAll("**", "")
       .trim();
     setTitle(title);
+    const sources = flat(
+      tasks.map((item) => (item.sources ? item.sources : []))
+    );
     setSources(sources);
     const id = save(taskStore.backup());
     setId(id);
@@ -464,7 +317,7 @@ function useDeepResearch() {
 
   async function deepResearch() {
     const { language } = useSettingStore.getState();
-    const { reportPlan } = useTaskStore.getState();
+    const { query } = useTaskStore.getState();
     const { thinkingModel } = getModel();
     setStatus(t("research.common.thinking"));
     try {
@@ -473,7 +326,7 @@ function useDeepResearch() {
         model: createProvider(thinkingModel),
         system: getSystemPrompt(),
         prompt: [
-          generateSerpQueriesPrompt(reportPlan),
+          generateSerpQueriesPrompt(query),
           getResponseLanguagePrompt(language),
         ].join("\n\n"),
         experimental_transform: smoothTextStream(),
@@ -513,7 +366,6 @@ function useDeepResearch() {
     status,
     deepResearch,
     askQuestions,
-    writeReportPlan,
     runSearchTask,
     reviewSearchResult,
     writeFinalReport,

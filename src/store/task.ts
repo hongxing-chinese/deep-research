@@ -5,20 +5,18 @@ import { pick } from "radash";
 export interface TaskStore {
   id: string;
   question: string;
-  resources: Resource[];
-  query: string;
   questions: string;
-  feedback: string;
-  reportPlan: string;
-  suggestion: string;
-  tasks: SearchTask[];
-  requirement: string;
-  title: string;
   finalReport: string;
+  query: string;
+  title: string;
+  suggestion: string;
+  requirement: string;
+  tasks: SearchTask[];
   sources: Source[];
+  feedback: string;
 }
 
-interface TaskFunction {
+type TaskFunction = {
   update: (tasks: SearchTask[]) => void;
   setId: (id: string) => void;
   setTitle: (title: string) => void;
@@ -28,11 +26,7 @@ interface TaskFunction {
   updateTask: (query: string, task: Partial<SearchTask>) => void;
   removeTask: (query: string) => boolean;
   setQuestion: (question: string) => void;
-  addResource: (resource: Resource) => void;
-  updateResource: (id: string, resource: Partial<Resource>) => void;
-  removeResource: (id: string) => boolean;
   updateQuestions: (questions: string) => void;
-  updateReportPlan: (plan: string) => void;
   updateFinalReport: (report: string) => void;
   setSources: (sources: Source[]) => void;
   setFeedback: (feedback: string) => void;
@@ -40,22 +34,20 @@ interface TaskFunction {
   reset: () => void;
   backup: () => TaskStore;
   restore: (taskStore: TaskStore) => void;
-}
+};
 
 const defaultValues: TaskStore = {
   id: "",
   question: "",
-  resources: [],
-  query: "",
   questions: "",
-  feedback: "",
-  reportPlan: "",
-  suggestion: "",
-  tasks: [],
-  requirement: "",
-  title: "",
   finalReport: "",
+  query: "",
+  title: "",
+  suggestion: "",
+  requirement: "",
+  tasks: [],
   sources: [],
+  feedback: "",
 };
 
 export const useTaskStore = create(
@@ -81,22 +73,7 @@ export const useTaskStore = create(
         return true;
       },
       setQuestion: (question) => set(() => ({ question })),
-      addResource: (resource) =>
-        set((state) => ({ resources: [resource, ...state.resources] })),
-      updateResource: (id, resource) => {
-        const newResources = get().resources.map((item) => {
-          return item.id === id ? { ...item, ...resource } : item;
-        });
-        set(() => ({ resources: [...newResources] }));
-      },
-      removeResource: (id) => {
-        set((state) => ({
-          resources: state.resources.filter((resource) => resource.id !== id),
-        }));
-        return true;
-      },
       updateQuestions: (questions) => set(() => ({ questions })),
-      updateReportPlan: (plan) => set(() => ({ reportPlan: plan })),
       updateFinalReport: (report) => set(() => ({ finalReport: report })),
       setSources: (sources) => set(() => ({ sources })),
       setFeedback: (feedback) => set(() => ({ feedback })),

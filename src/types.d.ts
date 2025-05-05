@@ -1,41 +1,22 @@
-interface Resource {
+interface Source {
+  sourceType: "url";
   id: string;
-  name: string;
-  type: string;
-  size: number;
-  status: "unprocessed" | "processing" | "completed" | "failed";
+  url: string;
+  title?: string;
 }
 
-interface FileMeta {
-  name: string;
-  size: number;
-  type: string;
-  lastModified: number;
-}
-
-interface Knowledge {
-  id: string;
-  title: string;
-  content: string;
-  type: "file" | "url" | "knowledge";
-  fileMeta?: FileMeta;
-  url?: string;
-  createdAt: number;
-  updatedAt: number;
+interface SearchTask {
+  state: "unprocessed" | "processing" | "completed";
+  query: string;
+  researchGoal: string;
+  learning: string;
+  sources: Source[];
 }
 
 interface Source {
   title?: string;
   content?: string;
   url: string;
-}
-
-interface SearchTask {
-  state: "unprocessed" | "processing" | "completed" | "failed";
-  query: string;
-  researchGoal: string;
-  learning: string;
-  sources: Source[];
 }
 
 interface PartialJson {
