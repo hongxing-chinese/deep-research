@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import { useTheme } from "next-themes";
 import { useGlobalStore } from "@/store/global";
 import { useSettingStore } from "@/store/setting";
+import { getUTC8Year } from "@/utils/date";
 
 const Header = dynamic(() => import("@/components/Internal/Header"));
 const Setting = dynamic(() => import("@/components/Setting"));
@@ -49,9 +50,10 @@ function Home() {
         <FinalReport />
       </main>
       <footer className="my-4 text-center text-sm text-gray-600 print:hidden">
-        <a href="https://github.com/u14app/" target="_blank">
+        <a href="https://wideseek.de" target="_blank">
           {t("copyright", {
-            name: "U14App",
+            name: "WideSeek",
+            year: getUTC8Year(),
           })}
         </a>
       </footer>

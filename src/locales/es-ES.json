@@ -2,7 +2,7 @@
   "title": "Deep Research",
   "theme": "Tema",
   "openSource": "Código Abierto",
-  "copyright": "Creado con ❤️ por el equipo de {{name}}",
+  "copyright": "Derechos de autor © {{year}} WideSeek.",
   "searchPlaceholder": "Por favor, introduce palabras clave",
   "header": {
     "session": {
