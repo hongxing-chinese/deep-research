@@ -1,14 +1,13 @@
 import { useState } from "react";
 import {
   streamText,
+  parsePartialJson,
   smoothStream,
   type JSONValue,
   type Tool,
   type UserContent,
 } from "ai";
-import { parsePartialJson } from "@ai-sdk/ui-utils";
 import { openai } from "@ai-sdk/openai";
-import { type GoogleGenerativeAIProviderMetadata } from "@ai-sdk/google";
 import { useTranslation } from "react-i18next";
 import Plimit from "p-limit";
 import { toast } from "sonner";
@@ -226,7 +225,7 @@ function useDeepResearch() {
     for await (const part of result.fullStream) {
       if (part.type === "text-delta") {
         thinkTagStreamProcessor.processChunk(
-          part.textDelta,
+          part.text,
           (data) => {
             content += data;
             taskStore.updateQuestions(content);
@@ -235,8 +234,8 @@ function useDeepResearch() {
             reasoning += data;
           }
         );
-      } else if (part.type === "reasoning") {
-        reasoning += part.textDelta;
+      } else if (part.type === "reasoning-delta") {
+        reasoning += part.text;
       }
     }
     if (reasoning) console.log(reasoning);
@@ -264,7 +263,7 @@ function useDeepResearch() {
     for await (const part of result.fullStream) {
       if (part.type === "text-delta") {
         thinkTagStreamProcessor.processChunk(
-          part.textDelta,
+          part.text,
           (data) => {
             content += data;
             taskStore.updateReportPlan(content);
@@ -273,8 +272,8 @@ function useDeepResearch() {
             reasoning += data;
           }
         );
-      } else if (part.type === "reasoning") {
-        reasoning += part.textDelta;
+      } else if (part.type === "reasoning-delta") {
+        reasoning += part.text;
       }
     }
     if (reasoning) console.log(reasoning);
@@ -321,7 +320,7 @@ function useDeepResearch() {
     for await (const part of searchResult.fullStream) {
       if (part.type === "text-delta") {
         thinkTagStreamProcessor.processChunk(
-          part.textDelta,
+          part.text,
           (data) => {
             content += data;
             taskStore.updateTask(query, { learning: content });
@@ -330,8 +329,8 @@ function useDeepResearch() {
             reasoning += data;
           }
         );
-      } else if (part.type === "reasoning") {
-        reasoning += part.textDelta;
+      } else if (part.type === "reasoning-delta") {
+        reasoning += part.text;
       }
     }
     if (reasoning) console.log(reasoning);
@@ -465,7 +464,7 @@ function useDeepResearch() {
           for await (const part of searchResult.fullStream) {
             if (part.type === "text-delta") {
               thinkTagStreamProcessor.processChunk(
-                part.textDelta,
+                part.text,
                 (data) => {
                   content += data;
                   taskStore.updateTask(item.query, { learning: content });
@@ -474,34 +473,10 @@ function useDeepResearch() {
                   reasoning += data;
                 }
               );
-            } else if (part.type === "reasoning") {
-              reasoning += part.textDelta;
-            } else if (part.type === "source") {
-              sources.push(part.source);
-            } else if (part.type === "finish") {
-              if (part.providerMetadata?.google) {
-                const { groundingMetadata } = part.providerMetadata.google;
-                const googleGroundingMetadata =
-                  groundingMetadata as GoogleGenerativeAIProviderMetadata["groundingMetadata"];
-                if (googleGroundingMetadata?.groundingSupports) {
-                  googleGroundingMetadata.groundingSupports.forEach(
-                    ({ segment, groundingChunkIndices }) => {
-                      if (segment.text && groundingChunkIndices) {
-                        const index = groundingChunkIndices.map(
-                          (idx: number) => `[${idx + 1}]`
-                        );
-                        content = content.replaceAll(
-                          segment.text,
-                          `${segment.text}${index.join("")}`
-                        );
-                      }
-                    }
-                  );
-                }
-              } else if (part.providerMetadata?.openai) {
-                // Fixed the problem that OpenAI cannot generate markdown reference link syntax properly in Chinese context
-                content = content.replaceAll("【", "[").replaceAll("】", "]");
-              }
+            } else if (part.type === "reasoning-delta") {
+              reasoning += part.text;
+            } else if (part.type === "source" && "url" in part) {
+              sources.push({ title: part.title, url: part.url });
             }
           }
           if (reasoning) console.log(reasoning);
@@ -573,29 +548,23 @@ function useDeepResearch() {
         textPart,
         (text) => {
           content += text;
-          const data: PartialJson = parsePartialJson(
-            removeJsonMarkdown(content)
-          );
-          if (
-            querySchema.safeParse(data.value) &&
-            data.state === "successful-parse"
-          ) {
-            if (data.value) {
-              queries = data.value.map(
-                (item: { query: string; researchGoal: string }) => ({
-                  state: "unprocessed",
-                  learning: "",
-                  ...pick(item, ["query", "researchGoal"]),
-                })
-              );
-              queries = queries.slice(0, getMaxCollectionTopics());
-            }
-          }
         },
         (text) => {
           reasoning += text;
         }
       );
+      const data = await parsePartialJson(removeJsonMarkdown(content));
+      const parsedQueries = querySchema.safeParse(data.value);
+      if (parsedQueries.success && data.state === "successful-parse") {
+        queries = parsedQueries.data.map((item) => ({
+          state: "unprocessed",
+          learning: "",
+          sources: [],
+          images: [],
+          ...pick(item, ["query", "researchGoal"]),
+        }));
+        queries = queries.slice(0, getMaxCollectionTopics());
+      }
     }
     if (reasoning) console.log(reasoning);
     if (queries.length > 0) {
@@ -702,7 +671,7 @@ function useDeepResearch() {
     if (enableFileFormatResource) {
       messageContent.push({
         type: "file",
-        mimeType: "text/markdown",
+        mediaType: "text/markdown",
         filename: "resources.md",
         data: fileData,
       });
@@ -729,7 +698,7 @@ function useDeepResearch() {
     for await (const part of result.fullStream) {
       if (part.type === "text-delta") {
         thinkTagStreamProcessor.processChunk(
-          part.textDelta,
+          part.text,
           (data) => {
             content += data;
             updateFinalReport(content);
@@ -738,8 +707,8 @@ function useDeepResearch() {
             reasoning += data;
           }
         );
-      } else if (part.type === "reasoning") {
-        reasoning += part.textDelta;
+      } else if (part.type === "reasoning-delta") {
+        reasoning += part.text;
       }
     }
     if (reasoning) console.log(reasoning);
@@ -799,32 +768,28 @@ function useDeepResearch() {
           textPart,
           (text) => {
             content += text;
-            const data: PartialJson = parsePartialJson(
-              removeJsonMarkdown(content)
-            );
-            if (querySchema.safeParse(data.value)) {
-              if (
-                data.state === "repaired-parse" ||
-                data.state === "successful-parse"
-              ) {
-                if (data.value) {
-                  queries = data.value.map(
-                    (item: { query: string; researchGoal: string }) => ({
-                      state: "unprocessed",
-                      learning: "",
-                      ...pick(item, ["query", "researchGoal"]),
-                    })
-                  );
-                  queries = queries.slice(0, getMaxCollectionTopics());
-                  taskStore.update(queries);
-                }
-              }
-            }
           },
           (text) => {
             reasoning += text;
           }
         );
+        const data = await parsePartialJson(removeJsonMarkdown(content));
+        const parsedQueries = querySchema.safeParse(data.value);
+        if (
+          parsedQueries.success &&
+          (data.state === "repaired-parse" ||
+            data.state === "successful-parse")
+        ) {
+          queries = parsedQueries.data.map((item) => ({
+            state: "unprocessed",
+            learning: "",
+            sources: [],
+            images: [],
+            ...pick(item, ["query", "researchGoal"]),
+          }));
+          queries = queries.slice(0, getMaxCollectionTopics());
+          taskStore.update(queries);
+        }
       }
       if (reasoning) console.log(reasoning);
       if (queries.length > 0) {
